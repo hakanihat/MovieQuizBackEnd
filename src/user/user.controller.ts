@@ -1,3 +1,4 @@
+// src/user/user.controller.ts
 import {
   Controller,
   Get,
@@ -8,7 +9,7 @@ import {
   Patch,
   Param,
   NotFoundException,
-  Query, // NEW: Import Query
+  Query,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { FriendsService } from '../friends/friends.service';
@@ -22,6 +23,20 @@ export class UserController {
     private readonly friendsService: FriendsService,
     private readonly watchlistService: WatchlistService,
   ) {}
+
+  /**
+   * 👇 NEW REGISTER ROUTE 👇
+   * POST /users/register
+   * Creates a new user. Public access (No Guard).
+   */
+  @Post('register')
+  async register(@Body() body: any) {
+    // Extract fields from the request body
+    const { username, email, password } = body;
+    // Call service to create user (which handles hashing)
+    return this.userService.create(username, email, password);
+  }
+  /** 👆 END NEW ROUTE 👆 */
 
   /**
    * GET /users/search?q=username

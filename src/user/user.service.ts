@@ -1,3 +1,4 @@
+// src/user/user.service.ts
 import {
   Injectable,
   ConflictException,
@@ -5,13 +6,14 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { User, UserDocument } from './user.schema';
+import { User, UserDocument } from './user.schema'; // Check path if needed
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UserService {
   constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
 
+  // Create User (Register)
   async create(
     username: string,
     email: string,
@@ -29,7 +31,7 @@ export class UserService {
     const createdUser = new this.userModel({
       username,
       email,
-      passwordHash,
+      passwordHash, // Saving the hashed password
       watchlist: [],
       quizResults: [],
     });
@@ -44,7 +46,7 @@ export class UserService {
     return this.userModel.findById(id).lean().exec();
   }
 
-  // --- NEW: Search Users ---
+  // Search Users
   async search(query: string): Promise<any[]> {
     if (!query) return [];
     return this.userModel
@@ -57,11 +59,13 @@ export class UserService {
       .exec();
   }
 
+  // Validate User (Login)
   async validateUser(
     username: string,
     password: string,
   ): Promise<UserDocument | null> {
     const user = await this.findByUsername(username);
+    // Compare plain text password with stored hash
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       return user;
     }
