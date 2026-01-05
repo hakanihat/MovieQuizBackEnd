@@ -1,41 +1,65 @@
-// src/quiz/quiz.service.ts
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Quiz, QuizDocument } from './quiz.schema';
 
 @Injectable()
 export class QuizService {
   constructor(@InjectModel(Quiz.name) private quizModel: Model<QuizDocument>) {}
 
-  async createQuiz(quizData: Quiz): Promise<Quiz> {
-    const createdQuiz = new this.quizModel(quizData);
+  /**
+   * Creates a quiz and randomizes the order of choices.
+   * Updates the correctIndex to ensure the answer remains valid.
+   */
+  async createQuiz(quizData: Quiz): Promise<QuizDocument> {
+    // 1. Identify the text of the correct answer using your schema's 'choices'
+    const correctAnswerText = quizData.choices[quizData.correctIndex];
+
+    // 2. Shuffle the choices array using Fisher-Yates
+    const shuffledChoices = this.shuffleArray(quizData.choices);
+
+    // 3. Update the correctIndex based on the new position in 'shuffledChoices'
+    const newCorrectIndex = shuffledChoices.indexOf(correctAnswerText);
+
+    // 4. Save with the randomized data
+    const createdQuiz = new this.quizModel({
+      ...quizData,
+      choices: shuffledChoices,
+      correctIndex: newCorrectIndex,
+    });
+
     return createdQuiz.save();
   }
 
-  // Retrieve and randomize quiz questions for a given movie
-  async findQuizByImdbID(imdbID: string): Promise<Quiz[]> {
+  /**
+   * Retrieves and shuffles the order of the questions for a specific movie.
+   */
+  async findQuizByImdbID(imdbID: string): Promise<QuizDocument[]> {
     const questions = await this.quizModel.find({ imdbID }).exec();
+    // Shuffles which question comes first, second, etc.
     return this.shuffleArray(questions);
   }
 
-  async updateQuiz(id: string, quizData: Partial<Quiz>): Promise<Quiz | null> {
+  async updateQuiz(
+    id: string,
+    quizData: Partial<Quiz>,
+  ): Promise<QuizDocument | null> {
     return this.quizModel.findByIdAndUpdate(id, quizData, { new: true }).exec();
   }
 
-  async removeQuiz(id: string): Promise<Quiz | null> {
+  async removeQuiz(id: string): Promise<QuizDocument | null> {
     return this.quizModel.findByIdAndDelete(id).exec();
   }
 
-  // --- NEW: Get list of movies that have quizzes ---
   async getMoviesWithQuizzes(): Promise<string[]> {
-    // Returns an array of unique imdbIDs from the quizzes collection
     return this.quizModel.distinct('imdbID').exec();
   }
 
-  // Helper: Shuffle array (Fisher–Yates algorithm)
+  /**
+   * Helper: Fisher–Yates shuffle algorithm
+   */
   private shuffleArray<T>(array: T[]): T[] {
-    const newArr = array.slice();
+    const newArr = [...array];
     for (let i = newArr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
@@ -43,7 +67,9 @@ export class QuizService {
     return newArr;
   }
 
-  // Calculate score with a single database call
+  /**
+   * Calculates score based on your schema's correctIndex
+   */
   async calculateScore(
     submissions: { questionId: string; selectedIndex: number }[],
   ): Promise<number> {
@@ -52,8 +78,9 @@ export class QuizService {
       .find({ _id: { $in: questionIds } })
       .exec();
 
-    const questionMap = new Map(
-      questions.map((q) => [(q as any)._id.toString(), q]),
+    // --- FIX: Cast q._id to string or access via .id ---
+    const questionMap = new Map<string, QuizDocument>(
+      questions.map((q) => [String(q._id), q]),
     );
 
     let score = 0;
