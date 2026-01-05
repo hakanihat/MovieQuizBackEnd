@@ -12,13 +12,16 @@ import { FriendsModule } from './friends/friends.module';
 
 @Module({
   imports: [
-    MongooseModule.forRoot('mongodb://localhost:27017/movie_quiz'),
+    // FIX IS HERE: Use process.env.MONGO_URI
+    MongooseModule.forRoot(
+      process.env.MONGO_URI || 'mongodb://localhost:27017/movie_quiz',
+    ),
     LeaderboardModule,
     QuizModule,
     AuthModule,
     UserModule,
     WatchlistModule,
-    FriendsModule, // <--- Add to main imports
+    FriendsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
