@@ -12,6 +12,7 @@ async function bootstrap() {
 
   // CHANGE THIS LINE: Use 3001 instead of 3000
   await app.listen(process.env.PORT || 3001);
+  console.log('BACKEND VERSION: 1.5 - Randomizer Fix Applied!');
   console.log(`Application is running on: ${await app.getUrl()}`);
 }
 bootstrap();

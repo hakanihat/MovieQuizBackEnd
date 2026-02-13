@@ -1,4 +1,3 @@
-// src/quiz/quiz.controller.ts
 import {
   Controller,
   Post,
@@ -18,7 +17,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { UserService } from '../user/user.service';
 import { LeaderboardService } from '../leaderboard/leaderboard.service';
 
-@Controller('quiz') // Note: Base route is 'quiz'
+@Controller('quiz')
 export class QuizController {
   constructor(
     private readonly quizService: QuizService,
@@ -26,20 +25,17 @@ export class QuizController {
     private readonly leaderboardService: LeaderboardService,
   ) {}
 
-  // --- NEW ENDPOINT: Get IDs of movies with quizzes ---
-  // Place this BEFORE the :imdbID route so it doesn't get caught as a param
   @Get('available-movies')
   async getAvailableMovies() {
     return this.quizService.getMoviesWithQuizzes();
   }
 
-  // --- GET METHOD WITH RESTRICTION ---
   @Get(':imdbID')
   @UseGuards(AuthGuard('jwt'))
   async getQuiz(
     @Param('imdbID') imdbID: string,
     @Request() req,
-  ): Promise<Quiz[]> {
+  ): Promise<any[]> {
     const hasTaken = await this.userService.hasUserCompletedQuiz(
       req.user.userId,
       imdbID,
@@ -62,14 +58,15 @@ export class QuizController {
     return this.quizService.createQuiz(quiz);
   }
 
-  // --- SUBMIT METHOD ---
+  // --- UPDATED SUBMIT METHOD ---
   @Post('submit')
   @UseGuards(AuthGuard('jwt'))
   async submitQuiz(
     @Body()
     body: {
       imdbID: string;
-      answers: { questionId: string; selectedIndex: number }[];
+      // Changing selectedIndex (number) to selectedAnswer (string)
+      answers: { questionId: string; selectedAnswer: string }[];
       movieTitle: string;
       timeTaken: number;
     },
