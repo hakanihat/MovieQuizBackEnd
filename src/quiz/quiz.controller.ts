@@ -1,3 +1,4 @@
+// backend/src/quiz/quiz.controller.ts
 import {
   Controller,
   Post,
@@ -16,6 +17,9 @@ import { Quiz } from './quiz.schema';
 import { AuthGuard } from '@nestjs/passport';
 import { UserService } from '../user/user.service';
 import { LeaderboardService } from '../leaderboard/leaderboard.service';
+// 1. Import the Roles tools
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('quiz')
 export class QuizController {
@@ -52,20 +56,20 @@ export class QuizController {
     return questions;
   }
 
+  // --- SECURED: CREATE QUIZ ---
   @Post()
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard) // Add RolesGuard
+  @Roles('admin') // Only 'admin' role allowed
   async create(@Body() quiz: Quiz): Promise<Quiz> {
     return this.quizService.createQuiz(quiz);
   }
 
-  // --- UPDATED SUBMIT METHOD ---
   @Post('submit')
   @UseGuards(AuthGuard('jwt'))
   async submitQuiz(
     @Body()
     body: {
       imdbID: string;
-      // Changing selectedIndex (number) to selectedAnswer (string)
       answers: { questionId: string; selectedAnswer: string }[];
       movieTitle: string;
       timeTaken: number;
@@ -113,8 +117,10 @@ export class QuizController {
     return { score, totalQuestions, correctCount, rank };
   }
 
+  // --- SECURED: UPDATE QUIZ ---
   @Put(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard) // Add RolesGuard
+  @Roles('admin') // Only 'admin' role allowed
   async update(
     @Param('id') id: string,
     @Body() quiz: Partial<Quiz>,
@@ -126,8 +132,10 @@ export class QuizController {
     return updatedQuiz;
   }
 
+  // --- SECURED: DELETE QUIZ ---
   @Delete(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard) // Add RolesGuard
+  @Roles('admin') // Only 'admin' role allowed
   async remove(@Param('id') id: string): Promise<Quiz> {
     const deletedQuiz = await this.quizService.removeQuiz(id);
     if (!deletedQuiz) {

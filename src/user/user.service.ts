@@ -105,6 +105,28 @@ export class UserService {
     );
   }
 
+  async findByEmail(email: string): Promise<UserDocument | null> {
+    return this.userModel.findOne({ email }).exec();
+  }
+
+  async findOneByResetToken(token: string): Promise<UserDocument | null> {
+    return this.userModel
+      .findOne({
+        resetPasswordToken: token,
+        resetPasswordExpires: { $gt: Date.now() }, // Check if not expired
+      })
+      .exec();
+  }
+
+  // Helper for Admin Dashboard to get all users
+  async findAll(): Promise<UserDocument[]> {
+    return this.userModel.find().select('-passwordHash').exec();
+  }
+
+  async deleteUser(userId: string): Promise<any> {
+    return this.userModel.findByIdAndDelete(userId).exec();
+  }
+
   async hasUserCompletedQuiz(userId: string, imdbID: string): Promise<boolean> {
     const user = await this.userModel.findById(userId).lean().exec();
     if (!user || !user.quizResults) return false;

@@ -23,15 +23,17 @@ export class User {
   @Prop({ default: 'user' })
   role: string;
 
-  // --- CRITICAL FIX: ARRAY DEFINITIONS ---
-  // Using type: [] ensures Mongoose creates a path for these arrays in the database.
-  // Without these @Prop definitions, Mongoose ignores data pushed to these fields.
-
   @Prop({ type: [], default: [] })
   watchlist: any[];
 
   @Prop({ type: [], default: [] })
   quizResults: any[];
+
+  @Prop()
+  resetPasswordToken?: string;
+
+  @Prop()
+  resetPasswordExpires?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
