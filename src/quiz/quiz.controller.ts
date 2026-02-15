@@ -1,4 +1,4 @@
-// backend/src/quiz/quiz.controller.ts
+// src/quiz/quiz.controller.ts
 import {
   Controller,
   Post,
@@ -17,7 +17,6 @@ import { Quiz } from './quiz.schema';
 import { AuthGuard } from '@nestjs/passport';
 import { UserService } from '../user/user.service';
 import { LeaderboardService } from '../leaderboard/leaderboard.service';
-// 1. Import the Roles tools
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 
@@ -32,6 +31,14 @@ export class QuizController {
   @Get('available-movies')
   async getAvailableMovies() {
     return this.quizService.getMoviesWithQuizzes();
+  }
+
+  // --- NEW: ADMIN GET ALL QUESTIONS ---
+  @Get('all')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('admin')
+  async getAllQuizzes() {
+    return this.quizService.findAll();
   }
 
   @Get(':imdbID')
@@ -56,10 +63,9 @@ export class QuizController {
     return questions;
   }
 
-  // --- SECURED: CREATE QUIZ ---
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard) // Add RolesGuard
-  @Roles('admin') // Only 'admin' role allowed
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('admin')
   async create(@Body() quiz: Quiz): Promise<Quiz> {
     return this.quizService.createQuiz(quiz);
   }
@@ -117,10 +123,9 @@ export class QuizController {
     return { score, totalQuestions, correctCount, rank };
   }
 
-  // --- SECURED: UPDATE QUIZ ---
   @Put(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard) // Add RolesGuard
-  @Roles('admin') // Only 'admin' role allowed
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('admin')
   async update(
     @Param('id') id: string,
     @Body() quiz: Partial<Quiz>,
@@ -132,10 +137,9 @@ export class QuizController {
     return updatedQuiz;
   }
 
-  // --- SECURED: DELETE QUIZ ---
   @Delete(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard) // Add RolesGuard
-  @Roles('admin') // Only 'admin' role allowed
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('admin')
   async remove(@Param('id') id: string): Promise<Quiz> {
     const deletedQuiz = await this.quizService.removeQuiz(id);
     if (!deletedQuiz) {

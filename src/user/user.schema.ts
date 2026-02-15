@@ -20,7 +20,7 @@ export class User {
   })
   avatar: string;
 
-  @Prop({ default: 'user' })
+  @Prop({ default: 'user' }) // 'user' or 'admin'
   role: string;
 
   @Prop({ type: [], default: [] })
@@ -29,6 +29,7 @@ export class User {
   @Prop({ type: [], default: [] })
   quizResults: any[];
 
+  // --- NEW: FORGOT PASSWORD FIELDS ---
   @Prop()
   resetPasswordToken?: string;
 

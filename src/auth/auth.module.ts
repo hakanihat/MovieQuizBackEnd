@@ -5,20 +5,20 @@ import { UserModule } from '../user/user.module';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './jwt.strategy';
-import { ConfigModule, ConfigService } from '@nestjs/config'; // <--- Import
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
     UserModule,
     PassportModule,
-    // Switch to registerAsync to safely inject the ConfigService
+    ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
+      inject: [ConfigService], // <--- Inject the service
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
+        secret: configService.get<string>('JWT_SECRET'), // <--- Read from .env
         signOptions: { expiresIn: '1h' },
       }),
-      inject: [ConfigService],
     }),
   ],
   providers: [AuthService, JwtStrategy],

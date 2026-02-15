@@ -59,27 +59,23 @@ export class UserService {
       .exec();
   }
 
-  // Validate User (Login)
+  // Validate User (Login) - UPDATED to support Email or Username
   async validateUser(
-    username: string,
-    password: string,
+    identifier: string, // Changed parameter name to reflect it can be either
+    pass: string,
   ): Promise<UserDocument | null> {
-    const user = await this.findByUsername(username);
-    // Compare plain text password with stored hash
-    if (user && (await bcrypt.compare(password, user.passwordHash))) {
+    // Search for user by either username OR email
+    const user = await this.userModel
+      .findOne({
+        $or: [{ username: identifier }, { email: identifier }],
+      })
+      .exec();
+
+    // Compare plain text password with stored hash if user is found
+    if (user && (await bcrypt.compare(pass, user.passwordHash))) {
       return user;
     }
     return null;
-  }
-
-  async updateRole(userId: string, role: string): Promise<UserDocument> {
-    const updatedUser = await this.userModel
-      .findByIdAndUpdate(userId, { role }, { new: true })
-      .exec();
-    if (!updatedUser) {
-      throw new NotFoundException('User not found');
-    }
-    return updatedUser;
   }
 
   async addQuizResult(
@@ -131,6 +127,38 @@ export class UserService {
     const user = await this.userModel.findById(userId).lean().exec();
     if (!user || !user.quizResults) return false;
     return user.quizResults.some((q) => q.imdbID === imdbID);
+  }
+
+  async changeUserRole(userId: string, newRole: string): Promise<UserDocument> {
+    const validRoles = ['user', 'admin'];
+
+    if (!validRoles.includes(newRole)) {
+      throw new ConflictException('Invalid role specified');
+    }
+
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(userId, { role: newRole }, { new: true })
+      .select('-passwordHash') // Don't return the password hash
+      .exec();
+
+    if (!updatedUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    return updatedUser;
+  }
+
+  // Ensure this existing method is robust for your AdminController
+  async updateRole(userId: string, role: string): Promise<UserDocument> {
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(userId, { role }, { new: true })
+      .select('-passwordHash')
+      .exec();
+
+    if (!updatedUser) {
+      throw new NotFoundException('User not found');
+    }
+    return updatedUser;
   }
 
   async update(

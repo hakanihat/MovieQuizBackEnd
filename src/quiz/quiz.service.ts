@@ -8,9 +8,11 @@ import { Quiz, QuizDocument } from './quiz.schema';
 export class QuizService {
   constructor(@InjectModel(Quiz.name) private quizModel: Model<QuizDocument>) {}
 
-  // 1. Create Quiz (Keeps your original logic)
+  // 1. Create Quiz
   async createQuiz(quizData: Quiz): Promise<QuizDocument> {
     const correctAnswerText = quizData.choices[quizData.correctIndex];
+    // Shuffle choices upon creation so they are stored randomly,
+    // BUT we must track where the correct answer went.
     const shuffledChoices = this.shuffleArray(quizData.choices);
     const newCorrectIndex = shuffledChoices.indexOf(correctAnswerText);
 
@@ -23,46 +25,40 @@ export class QuizService {
     return createdQuiz.save();
   }
 
-  // 2. Find Quiz (UPDATED: Added .lean() and console logs)
+  // 2. Find All (Raw Data for Admin Dashboard)
+  async findAll(): Promise<QuizDocument[]> {
+    return this.quizModel.find().sort({ _id: -1 }).exec(); // Newest first
+  }
+
+  // 3. Find Quiz by Movie ID (For Users - Shuffled)
   async findQuizByImdbID(imdbID: string): Promise<any[]> {
     console.log(`Fetching and shuffling quiz for: ${imdbID}`);
-
-    // .lean() converts Mongoose Documents to plain JS objects
-    // This allows us to modify/shuffle them freely
     const questions = await this.quizModel.find({ imdbID }).lean().exec();
 
     if (!questions) return [];
 
     const dynamicQuestions = questions.map((q) => {
-      // 1. Identify the actual answer string based on the stored index
       const originalCorrectAnswer = q.choices[q.correctIndex];
-
-      // 2. Shuffle the choices for this specific user session
       const shuffledChoices = this.shuffleArray([...q.choices]);
-
-      // 3. Find where the answer moved to
       const newCorrectIndex = shuffledChoices.indexOf(originalCorrectAnswer);
 
       return {
         _id: q._id,
         imdbID: q.imdbID,
         questionText: q.questionText,
-        choices: shuffledChoices, // The shuffled array
-        correctIndex: newCorrectIndex, // The new correct position
+        choices: shuffledChoices,
+        correctIndex: newCorrectIndex,
       };
     });
 
-    // 4. Shuffle the order of the questions themselves
     return this.shuffleArray(dynamicQuestions);
   }
 
-  // 3. Calculate Score (Matches Text)
+  // 4. Calculate Score
   async calculateScore(
     submissions: { questionId: string; selectedAnswer: string }[],
   ): Promise<number> {
     const questionIds = submissions.map((sub) => sub.questionId);
-
-    // Use .lean() here too for speed
     const questions = await this.quizModel
       .find({ _id: { $in: questionIds } })
       .lean()
@@ -76,9 +72,7 @@ export class QuizService {
     for (const sub of submissions) {
       const question = questionMap.get(sub.questionId);
       if (question) {
-        // Compare the TEXT the user sent vs the TEXT in the DB
         const dbCorrectAnswer = question.choices[question.correctIndex];
-
         if (dbCorrectAnswer === sub.selectedAnswer) {
           score += 10;
         }
@@ -87,14 +81,18 @@ export class QuizService {
     return score;
   }
 
-  // ... (Keep updateQuiz, removeQuiz, getMoviesWithQuizzes as they were) ...
+  // 5. Update Quiz
   async updateQuiz(
     id: string,
     quizData: Partial<Quiz>,
   ): Promise<QuizDocument | null> {
+    // If choices changed, we might want to handle re-shuffling logic here
+    // or trust the admin sent the correct index relative to the sent choices.
+    // For simplicity, we trust the admin form data matches.
     return this.quizModel.findByIdAndUpdate(id, quizData, { new: true }).exec();
   }
 
+  // 6. Delete Quiz
   async removeQuiz(id: string): Promise<QuizDocument | null> {
     return this.quizModel.findByIdAndDelete(id).exec();
   }

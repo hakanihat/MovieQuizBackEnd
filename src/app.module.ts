@@ -1,6 +1,9 @@
 // src/app.module.ts
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config'; // 1. Import Config tools
 import { MongooseModule } from '@nestjs/mongoose';
+import * as path from 'path'; // 2. Import 'path' to find the .env file
+
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { QuizModule } from './quiz/quiz.module';
 import { AuthModule } from './auth/auth.module';
@@ -12,10 +15,23 @@ import { FriendsModule } from './friends/friends.module';
 
 @Module({
   imports: [
-    // FIX IS HERE: Use process.env.MONGO_URI
-    MongooseModule.forRoot(
-      process.env.MONGO_URI || 'mongodb://localhost:27017/movie_quiz',
-    ),
+    // 3. FIX: Explicitly load the .env file from the root folder
+    ConfigModule.forRoot({
+      isGlobal: true, // Makes variables (like JWT_SECRET) available everywhere
+      envFilePath: path.resolve(process.cwd(), '.env'), // Forces NestJS to find the file
+    }),
+
+    // 4. FIX: Use 'forRootAsync' to wait for the .env file to load before connecting
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        uri:
+          configService.get<string>('MONGO_URI') ||
+          'mongodb://localhost:27017/movie_quiz',
+      }),
+      inject: [ConfigService],
+    }),
+
     LeaderboardModule,
     QuizModule,
     AuthModule,
