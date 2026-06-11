@@ -5,7 +5,7 @@ export type QuizDocument = Quiz & Document;
 
 @Schema()
 export class Quiz {
-  @Prop({ required: true })
+  @Prop({ required: true, index: true })
   imdbID: string; // Reference to the movie
 
   @Prop({ required: true })

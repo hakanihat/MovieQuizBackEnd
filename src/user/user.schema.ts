@@ -24,13 +24,10 @@ export class User {
   role: string;
 
   @Prop({ type: [], default: [] })
-  watchlist: any[];
-
-  @Prop({ type: [], default: [] })
   quizResults: any[];
 
   // --- NEW: FORGOT PASSWORD FIELDS ---
-  @Prop()
+  @Prop({ index: { sparse: true } })
   resetPasswordToken?: string;
 
   @Prop()
@@ -38,3 +35,10 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+
+// Case-insensitive index so username prefix search (see UserService.search)
+// can use a range scan instead of a full-collection regex scan.
+UserSchema.index(
+  { username: 1 },
+  { name: 'username_ci', collation: { locale: 'en', strength: 2 } },
+);

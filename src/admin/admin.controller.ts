@@ -6,6 +6,9 @@ import {
   Param,
   Body,
   UseGuards,
+  Request,
+  Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -19,22 +22,45 @@ export class AdminController {
   constructor(private readonly userService: UserService) {}
 
   @Get('dashboard')
-  async getDashboardStats() {
-    const users = await this.userService.findAll();
+  async getDashboardStats(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const p = Math.max(1, parseInt(page ?? '', 10) || 1);
+    const l = Math.min(100, Math.max(1, parseInt(limit ?? '', 10) || 20));
+    const skip = (p - 1) * l;
+
+    const [users, totalUsers] = await Promise.all([
+      this.userService.findAll(skip, l),
+      this.userService.countUsers(),
+    ]);
+
     return {
-      totalUsers: users.length,
-      users: users, // Send full list to frontend
+      totalUsers,
+      page: p,
+      limit: l,
+      totalPages: Math.max(1, Math.ceil(totalUsers / l)),
+      users,
     };
   }
 
   @Patch('users/:id/role')
-  async updateUserRole(@Param('id') id: string, @Body('role') role: string) {
-    // 👇 CRITICAL: Must return the result so the DB update is confirmed
+  async updateUserRole(
+    @Request() req,
+    @Param('id') id: string,
+    @Body('role') role: string,
+  ) {
+    if (id === req.user.userId) {
+      throw new BadRequestException('You cannot change your own role');
+    }
     return this.userService.changeUserRole(id, role);
   }
 
   @Delete('users/:id')
-  async deleteUser(@Param('id') id: string) {
+  async deleteUser(@Request() req, @Param('id') id: string) {
+    if (id === req.user.userId) {
+      throw new BadRequestException('You cannot delete your own account');
+    }
     return this.userService.deleteUser(id);
   }
 }

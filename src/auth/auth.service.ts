@@ -1,8 +1,6 @@
 // src/auth/auth.service.ts
 import {
   Injectable,
-  UnauthorizedException,
-  NotFoundException,
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -33,10 +31,6 @@ export class AuthService {
           ...result
         } = userObj;
 
-        console.log(
-          `[AuthService] Validated ${username}. Role from DB: ${userObj.role}`,
-        );
-
         return {
           ...result,
           role: userObj.role,
@@ -56,8 +50,6 @@ export class AuthService {
         sub: user._id || user.userId,
         role: user.role,
       };
-
-      console.log(`[AuthService] Signing Token for ${user.username}...`);
 
       const token = this.jwtService.sign(payload);
 
@@ -83,28 +75,45 @@ export class AuthService {
     }
   }
 
-  // --- FORGOT PASSWORD (Unchanged) ---
+  // --- FORGOT PASSWORD ---
   async forgotPassword(email: string) {
-    const user = await this.userService.findByEmail(email);
-    if (!user) throw new NotFoundException('Email not found');
+    // Always return the same response so attackers can't enumerate which
+    // emails are registered.
+    const genericResponse = {
+      message: 'If that email is registered, a reset link has been sent.',
+    };
 
+    const user = await this.userService.findByEmail(email);
+    if (!user) return genericResponse;
+
+    // Store only a hash of the token; the raw token goes in the email link.
     const resetToken = crypto.randomBytes(32).toString('hex');
-    user.resetPasswordToken = resetToken;
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+    user.resetPasswordToken = hashedToken;
     user.resetPasswordExpires = new Date(Date.now() + 3600000);
     await user.save();
 
-    const resetUrl = `http://localhost:3000/reset-password/${resetToken}`;
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const resetUrl = `${baseUrl}/reset-password/${resetToken}`;
     console.log(`\n=== [EMAIL SIMULATION] ===`);
     console.log(`To: ${email}`);
     console.log(`Link: ${resetUrl}`);
     console.log(`==========================\n`);
 
-    return { message: 'Password reset link sent (check server console)' };
+    return genericResponse;
   }
 
-  // --- RESET PASSWORD (Unchanged) ---
+  // --- RESET PASSWORD ---
   async resetPassword(token: string, newPassword: string) {
-    const user = await this.userService.findOneByResetToken(token);
+    // Look up by the hashed form of the supplied token.
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+    const user = await this.userService.findOneByResetToken(hashedToken);
 
     if (
       !user ||

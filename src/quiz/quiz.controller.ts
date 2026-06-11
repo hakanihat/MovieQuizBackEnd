@@ -14,6 +14,9 @@ import {
 } from '@nestjs/common';
 import { QuizService } from './quiz.service';
 import { Quiz } from './quiz.schema';
+import { CreateQuizDto } from './dto/create-quiz.dto';
+import { SubmitQuizDto } from './dto/submit-quiz.dto';
+import { CheckAnswerDto } from './dto/check-answer.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { UserService } from '../user/user.service';
 import { LeaderboardService } from '../leaderboard/leaderboard.service';
@@ -66,20 +69,22 @@ export class QuizController {
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('admin')
-  async create(@Body() quiz: Quiz): Promise<Quiz> {
-    return this.quizService.createQuiz(quiz);
+  async create(@Body() quiz: CreateQuizDto): Promise<Quiz> {
+    return this.quizService.createQuiz(quiz as Quiz);
+  }
+
+  // Verify a single answer for instant feedback without exposing all answers.
+  @Post('check')
+  @UseGuards(AuthGuard('jwt'))
+  async checkAnswer(@Body() body: CheckAnswerDto) {
+    return this.quizService.checkAnswer(body.questionId, body.selectedAnswer);
   }
 
   @Post('submit')
   @UseGuards(AuthGuard('jwt'))
   async submitQuiz(
     @Body()
-    body: {
-      imdbID: string;
-      answers: { questionId: string; selectedAnswer: string }[];
-      movieTitle: string;
-      timeTaken: number;
-    },
+    body: SubmitQuizDto,
     @Request() req,
   ): Promise<{
     score: number;
@@ -101,22 +106,24 @@ export class QuizController {
     const correctCount = score / 10;
     const totalQuestions = answers.length;
 
-    await this.userService.addQuizResult(req.user.userId, {
-      imdbID,
-      score,
-      movieTitle,
-      timeTaken,
-    });
-
-    await this.leaderboardService.create({
-      userId: req.user.userId,
-      username: req.user.username,
-      score: score,
-      imdbID: imdbID,
-      movieTitle: movieTitle,
-      timeTaken: timeTaken,
-      date: new Date(),
-    } as any);
+    // These two writes are independent, so run them together.
+    await Promise.all([
+      this.userService.addQuizResult(req.user.userId, {
+        imdbID,
+        score,
+        movieTitle,
+        timeTaken,
+      }),
+      this.leaderboardService.create({
+        userId: req.user.userId,
+        username: req.user.username,
+        score: score,
+        imdbID: imdbID,
+        movieTitle: movieTitle,
+        timeTaken: timeTaken,
+        date: new Date(),
+      } as any),
+    ]);
 
     const rank = await this.leaderboardService.calculateRank(score, timeTaken);
 

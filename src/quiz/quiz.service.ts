@@ -1,5 +1,5 @@
 // src/quiz/quiz.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Quiz, QuizDocument } from './quiz.schema';
@@ -32,26 +32,38 @@ export class QuizService {
 
   // 3. Find Quiz by Movie ID (For Users - Shuffled)
   async findQuizByImdbID(imdbID: string): Promise<any[]> {
-    console.log(`Fetching and shuffling quiz for: ${imdbID}`);
     const questions = await this.quizModel.find({ imdbID }).lean().exec();
 
     if (!questions) return [];
 
     const dynamicQuestions = questions.map((q) => {
-      const originalCorrectAnswer = q.choices[q.correctIndex];
       const shuffledChoices = this.shuffleArray([...q.choices]);
-      const newCorrectIndex = shuffledChoices.indexOf(originalCorrectAnswer);
 
+      // Note: correctIndex is intentionally NOT returned so the answer
+      // cannot be read from the network response. Correctness is checked
+      // server-side via checkAnswer() and re-scored on submit.
       return {
         _id: q._id,
         imdbID: q.imdbID,
         questionText: q.questionText,
         choices: shuffledChoices,
-        correctIndex: newCorrectIndex,
       };
     });
 
     return this.shuffleArray(dynamicQuestions);
+  }
+
+  // Verify a single answer server-side (used for instant per-question feedback).
+  async checkAnswer(
+    questionId: string,
+    selectedAnswer: string,
+  ): Promise<{ correct: boolean; correctAnswer: string }> {
+    const question = await this.quizModel.findById(questionId).lean().exec();
+    if (!question) {
+      throw new NotFoundException('Question not found');
+    }
+    const correctAnswer = question.choices[question.correctIndex];
+    return { correct: correctAnswer === selectedAnswer, correctAnswer };
   }
 
   // 4. Calculate Score

@@ -16,7 +16,7 @@ export class WatchlistService {
    */
   async addToWatchlist(
     userId: string,
-    movie: { imdbID: string; Title: string; Poster: string; Year: string },
+    movie: { imdbID: string; Title: string; Poster?: string; Year?: string },
   ): Promise<Watchlist> {
     // Check if the entry already exists to prevent duplicate documents in the collection
     const existing = await this.watchlistModel

@@ -18,25 +18,29 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    // Determine status and message
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+    const isHttp = exception instanceof HttpException;
 
-    const message =
-      exception instanceof HttpException ? exception.getResponse() : exception;
+    const status = isHttp
+      ? (exception as HttpException).getStatus()
+      : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    // Log the error with details
+    // Only surface client-safe messages. For unexpected (non-HTTP) errors,
+    // return a generic message so stack traces / DB errors never leak.
+    const clientMessage = isHttp
+      ? (exception as HttpException).getResponse()
+      : 'Internal server error';
+
+    // Always log the full detail server-side for debugging.
     this.logger.error(
-      `HTTP Status: ${status} Error Message: ${JSON.stringify(message)} - URL: ${request.url}`,
+      `HTTP ${status} - ${request.method} ${request.url}`,
+      exception instanceof Error ? exception.stack : JSON.stringify(exception),
     );
 
     response.status(status).json({
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
-      message,
+      message: clientMessage,
     });
   }
 }

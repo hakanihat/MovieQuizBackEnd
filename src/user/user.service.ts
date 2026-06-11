@@ -32,7 +32,6 @@ export class UserService {
       username,
       email,
       passwordHash, // Saving the hashed password
-      watchlist: [],
       quizResults: [],
     });
     return createdUser.save();
@@ -46,13 +45,16 @@ export class UserService {
     return this.userModel.findById(id).lean().exec();
   }
 
-  // Search Users
+  // Search Users (case-insensitive username prefix match).
+  // Uses a range query + collation index instead of an unanchored regex so it
+  // can do an index range scan rather than a full collection scan.
   async search(query: string): Promise<any[]> {
     if (!query) return [];
     return this.userModel
       .find({
-        username: { $regex: query, $options: 'i' }, // Case-insensitive regex
+        username: { $gte: query, $lt: `${query}￿` },
       })
+      .collation({ locale: 'en', strength: 2 })
       .select('username avatar _id') // Only return public info
       .limit(10)
       .lean()
@@ -114,9 +116,19 @@ export class UserService {
       .exec();
   }
 
-  // Helper for Admin Dashboard to get all users
-  async findAll(): Promise<UserDocument[]> {
-    return this.userModel.find().select('-passwordHash').exec();
+  // Helper for Admin Dashboard to get a page of users
+  async findAll(skip = 0, limit = 20): Promise<UserDocument[]> {
+    return this.userModel
+      .find()
+      .select('-passwordHash')
+      .sort({ _id: 1 })
+      .skip(skip)
+      .limit(limit)
+      .exec();
+  }
+
+  async countUsers(): Promise<number> {
+    return this.userModel.estimatedDocumentCount().exec();
   }
 
   async deleteUser(userId: string): Promise<any> {
@@ -124,9 +136,11 @@ export class UserService {
   }
 
   async hasUserCompletedQuiz(userId: string, imdbID: string): Promise<boolean> {
-    const user = await this.userModel.findById(userId).lean().exec();
-    if (!user || !user.quizResults) return false;
-    return user.quizResults.some((q) => q.imdbID === imdbID);
+    // Projected existence check — avoids loading the whole quizResults array.
+    const found = await this.userModel
+      .exists({ _id: userId, 'quizResults.imdbID': imdbID })
+      .exec();
+    return !!found;
   }
 
   async changeUserRole(userId: string, newRole: string): Promise<UserDocument> {

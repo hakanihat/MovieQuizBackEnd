@@ -11,6 +11,7 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { WatchlistService } from './watchlist.service';
 import { Watchlist } from './watchlist.schema';
+import { AddToWatchlistDto } from './dto/add-to-watchlist.dto';
 
 @Controller('watchlist')
 export class WatchlistController {
@@ -19,8 +20,7 @@ export class WatchlistController {
   @Post()
   @UseGuards(AuthGuard('jwt'))
   async addToWatchlist(
-    @Body()
-    body: { imdbID: string; Title: string; Poster: string; Year: string },
+    @Body() body: AddToWatchlistDto,
     @Request() req,
   ): Promise<Watchlist> {
     return this.watchlistService.addToWatchlist(req.user.userId, body);

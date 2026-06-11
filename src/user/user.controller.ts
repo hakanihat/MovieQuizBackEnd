@@ -14,7 +14,10 @@ import {
 import { UserService } from './user.service';
 import { FriendsService } from '../friends/friends.service';
 import { WatchlistService } from '../watchlist/watchlist.service';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('users')
 export class UserController {
@@ -29,12 +32,19 @@ export class UserController {
    * POST /users/register
    * Creates a new user. Public access (No Guard).
    */
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
-  async register(@Body() body: any) {
-    // Extract fields from the request body
+  async register(@Body() body: RegisterDto) {
     const { username, email, password } = body;
-    // Call service to create user (which handles hashing)
-    return this.userService.create(username, email, password);
+    const created = await this.userService.create(username, email, password);
+    // Never return passwordHash or reset tokens to the client
+    return {
+      _id: created._id,
+      username: created.username,
+      email: created.email,
+      avatar: created.avatar,
+      role: created.role,
+    };
   }
   /** 👆 END NEW ROUTE 👆 */
 
@@ -65,9 +75,11 @@ export class UserController {
    */
   @UseGuards(JwtAuthGuard)
   @Patch('profile')
-  async updateProfile(@Request() req, @Body() body: { avatar?: string }) {
+  async updateProfile(@Request() req, @Body() body: UpdateProfileDto) {
     const userId = req.user.userId;
-    return this.userService.update(userId, body);
+    // Explicitly pass only the avatar — never spread the raw body into the
+    // update, so privileged fields (role, passwordHash, …) can't be set.
+    return this.userService.update(userId, { avatar: body.avatar });
   }
 
   /**
@@ -109,10 +121,6 @@ export class UserController {
       : [];
 
     const publicQuizResults = isFriend ? targetUser.quizResults || [] : [];
-
-    console.log(
-      `[DEBUG] Profile Access for ${targetUser.username}: isFriend=${isFriend}, Watchlist=${publicWatchlist.length} items.`,
-    );
 
     return {
       _id: targetUser._id,

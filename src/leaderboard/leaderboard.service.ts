@@ -3,6 +3,12 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Leaderboard, LeaderboardDocument } from './leaderboard.schema';
 
+// Lightweight in-memory cache entry.
+interface CacheEntry<T> {
+  value: T;
+  expires: number;
+}
+
 @Injectable()
 export class LeaderboardService {
   constructor(
@@ -10,42 +16,74 @@ export class LeaderboardService {
     private leaderboardModel: Model<LeaderboardDocument>,
   ) {}
 
+  // The global aggregation and movie list scan the whole collection, so we
+  // cache their results briefly. Any new submission busts the cache.
+  private readonly CACHE_TTL_MS = 60_000;
+  private globalCache: CacheEntry<any[]> | null = null;
+  private moviesCache: CacheEntry<any[]> | null = null;
+
+  private invalidateCaches() {
+    this.globalCache = null;
+    this.moviesCache = null;
+  }
+
   async create(entry: Leaderboard): Promise<Leaderboard> {
     const createdEntry = new this.leaderboardModel(entry);
-    return createdEntry.save();
+    const saved = await createdEntry.save();
+    this.invalidateCaches();
+    return saved;
   }
 
   // 1. GLOBAL LEADERBOARD (Sum of all scores per user)
-  async getGlobalLeaderboard(): Promise<any[]> {
-    return this.leaderboardModel.aggregate([
+  // Only the default first page (top 50) is cached; custom pages bypass it.
+  async getGlobalLeaderboard(limit = 50, skip = 0): Promise<any[]> {
+    const isDefaultPage = skip === 0 && limit === 50;
+    if (isDefaultPage && this.globalCache && this.globalCache.expires > Date.now()) {
+      return this.globalCache.value;
+    }
+
+    const result = await this.leaderboardModel.aggregate([
       {
         $group: {
-          _id: '$userId', // Group by User
-          username: { $first: '$username' }, // Keep the username
-          totalScore: { $sum: '$score' }, // Sum their points
-          totalTime: { $sum: '$timeTaken' }, // Sum their time
-          quizzesTaken: { $sum: 1 }, // Count how many quizzes they took
+          _id: '$userId',
+          username: { $first: '$username' },
+          totalScore: { $sum: '$score' },
+          totalTime: { $sum: '$timeTaken' },
+          quizzesTaken: { $sum: 1 },
         },
       },
-      {
-        $sort: { totalScore: -1, totalTime: 1 }, // Sort by Score (Desc), then Time (Asc)
-      },
-      { $limit: 50 }, // Top 50 Users
+      { $sort: { totalScore: -1, totalTime: 1 } },
+      { $skip: skip },
+      { $limit: limit },
     ]);
+
+    if (isDefaultPage) {
+      this.globalCache = { value: result, expires: Date.now() + this.CACHE_TTL_MS };
+    }
+    return result;
   }
 
   // 2. MOVIE SPECIFIC LEADERBOARD
-  async getMovieLeaderboard(imdbID: string): Promise<Leaderboard[]> {
+  async getMovieLeaderboard(
+    imdbID: string,
+    limit = 50,
+    skip = 0,
+  ): Promise<Leaderboard[]> {
     return this.leaderboardModel
       .find({ imdbID })
-      .sort({ score: -1, timeTaken: 1 }) // High score, Low time
-      .limit(50)
+      .sort({ score: -1, timeTaken: 1 })
+      .skip(skip)
+      .limit(limit)
       .exec();
   }
 
   // 3. GET LIST OF MOVIES IN LEADERBOARD (For the Filter Dropdown)
   async getLeaderboardMovies(): Promise<any[]> {
-    return this.leaderboardModel.aggregate([
+    if (this.moviesCache && this.moviesCache.expires > Date.now()) {
+      return this.moviesCache.value;
+    }
+
+    const result = await this.leaderboardModel.aggregate([
       {
         $group: {
           _id: '$imdbID',
@@ -54,6 +92,9 @@ export class LeaderboardService {
       },
       { $sort: { movieTitle: 1 } },
     ]);
+
+    this.moviesCache = { value: result, expires: Date.now() + this.CACHE_TTL_MS };
+    return result;
   }
 
   // Helper for "Rank" calculation on submission (kept from previous steps)

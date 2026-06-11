@@ -20,3 +20,8 @@ export class FriendRequest {
 }
 
 export const FriendRequestSchema = SchemaFactory.createForClass(FriendRequest);
+
+// Friendship lookups query by either side of the pair, so index both directions.
+FriendRequestSchema.index({ requester: 1, recipient: 1 });
+FriendRequestSchema.index({ recipient: 1, status: 1 });
+FriendRequestSchema.index({ requester: 1, status: 1 });
